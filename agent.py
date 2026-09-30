@@ -6,6 +6,15 @@ import sys
 
 from openai import OpenAI
 
+from guardrails import (
+    check_log_lines,
+    check_log_path,
+    check_pid_value,
+    check_port,
+    check_sort_by,
+    check_top_n,
+)
+
 from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 
@@ -200,6 +209,9 @@ Do not claim to:
 
 Only claim an action was performed if an available tool actually
 performed it.
+
+read_recent_logs may only read paths returned by discover_logs.
+Do not request arbitrary filesystem paths.
 
 For unsupported actions, describe them only as possible manual
 next steps.
@@ -538,7 +550,7 @@ def validate_tool_arguments(
     known_pids: set[int]
 ) -> tuple[bool, str]:
     """
-    Validate tool arguments against runtime evidence.
+    Validate tool arguments against runtime policy and evidence.
 
     The runtime does not decide which tool the LLM should use.
 
@@ -553,12 +565,10 @@ def validate_tool_arguments(
 
         pid = arguments.get("pid")
 
-        if not isinstance(pid, int):
+        valid, error = check_pid_value(pid)
 
-            return (
-                False,
-                "The 'pid' argument must be an integer."
-            )
+        if not valid:
+            return False, error
 
         if pid not in known_pids:
 
@@ -568,6 +578,52 @@ def validate_tool_arguments(
                 "diagnostic tool result or explicitly identified "
                 "as a PID by the user. Do not invent process IDs."
             )
+
+    # --------------------------------------------------------
+    # find_process_by_port
+    # --------------------------------------------------------
+
+    elif tool_name == "find_process_by_port":
+
+        return check_port(arguments.get("port"))
+
+    # --------------------------------------------------------
+    # find_high_consumption_processes
+    # --------------------------------------------------------
+
+    elif tool_name == "find_high_consumption_processes":
+
+        if "top_n" in arguments:
+
+            valid, error = check_top_n(arguments.get("top_n"))
+
+            if not valid:
+                return False, error
+
+        if "sort_by" in arguments:
+
+            valid, error = check_sort_by(arguments.get("sort_by"))
+
+            if not valid:
+                return False, error
+
+    # --------------------------------------------------------
+    # read_recent_logs
+    # --------------------------------------------------------
+
+    elif tool_name == "read_recent_logs":
+
+        valid, error = check_log_path(arguments.get("path"))
+
+        if not valid:
+            return False, error
+
+        if "lines" in arguments:
+
+            valid, error = check_log_lines(arguments.get("lines"))
+
+            if not valid:
+                return False, error
 
     return True, ""
 
@@ -900,6 +956,11 @@ async def run_agent(
                     )
 
                     print(validation_error)
+
+                investigation_evidence.append(
+                    f"{tool_name} was blocked by a runtime "
+                    f"guardrail: {validation_error}"
+                )
 
                 recovery_message = {
                     "error": validation_error,

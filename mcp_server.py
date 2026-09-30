@@ -6,6 +6,19 @@ from collections import deque
 
 from mcp.server.mcpserver import MCPServer
 
+from guardrails import (
+    APPROVED_LOG_FILENAMES,
+    approved_log_directory,
+    check_log_lines,
+    check_log_path,
+    check_pid_value,
+    check_port,
+    check_sort_by,
+    check_top_n,
+    clamp_log_lines,
+    normalize_log_path,
+)
+
 
 # ============================================================
 # MCP SERVER
@@ -45,6 +58,13 @@ async def get_system_metrics() -> dict:
 @server.tool()
 async def find_process_by_port(port: int) -> dict:
     """Find the process using a specific network port."""
+
+    valid, error = check_port(port)
+
+    if not valid:
+        return {
+            "error": error
+        }
 
     matches = []
 
@@ -86,6 +106,13 @@ async def find_process_by_port(port: int) -> dict:
 @server.tool()
 async def inspect_process(pid: int) -> dict:
     """Get detailed information about a running process."""
+
+    valid, error = check_pid_value(pid)
+
+    if not valid:
+        return {
+            "error": error
+        }
 
     try:
 
@@ -136,12 +163,18 @@ async def find_high_consumption_processes(
     Also returns each process's memory usage for additional context.
     """
 
-    if sort_by not in ["cpu", "memory"]:
+    valid_sort, sort_error = check_sort_by(sort_by)
 
+    if not valid_sort:
         return {
-            "error": (
-                "sort_by must be either 'cpu' or 'memory'."
-            )
+            "error": sort_error
+        }
+
+    valid_top_n, top_n_error = check_top_n(top_n)
+
+    if not valid_top_n:
+        return {
+            "error": top_n_error
         }
 
     processes = []
@@ -386,19 +419,24 @@ async def read_recent_logs(
         # Validate requested number of lines
         # --------------------------------------------------------
 
-        if lines < 1:
+        valid_lines, lines_error = check_log_lines(lines)
 
+        if not valid_lines:
             return {
-                "error": (
-                    "lines must be greater than 0."
-                )
+                "error": lines_error
             }
 
-        # Prevent huge log reads
-        lines = min(
-            lines,
-            200
-        )
+        valid_path, path_error = check_log_path(path)
+
+        if not valid_path:
+            return {
+                "error": path_error,
+                "path": path
+            }
+
+        # Only open the resolved allowlisted path.
+        path = normalize_log_path(path)
+        lines = clamp_log_lines(lines)
 
         # --------------------------------------------------------
         # Read recent lines
@@ -513,14 +551,11 @@ async def read_recent_logs(
 async def discover_logs() -> dict:
     """Discover approved application log files available for diagnostics."""
 
-    current_dir = os.getcwd()
+    current_dir = approved_log_directory()
 
     approved_logs = []
 
-    for filename in [
-        "test_app.log",
-        "malicious_test.log"
-    ]:
+    for filename in APPROVED_LOG_FILENAMES:
         path = os.path.join(current_dir, filename)
 
         if os.path.isfile(path):

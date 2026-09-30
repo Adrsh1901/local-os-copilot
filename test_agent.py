@@ -135,6 +135,116 @@ def test_other_tools():
 
 
 # ============================================================
+# TEST 8 — INVALID PORT BLOCKED
+# ============================================================
+
+def test_invalid_port():
+
+    valid, error = validate_tool_arguments(
+        "find_process_by_port",
+        {"port": 99999},
+        set()
+    )
+
+    test(
+        "Block port outside 1-65535",
+        valid is False
+    )
+
+
+def test_non_integer_port():
+
+    valid, error = validate_tool_arguments(
+        "find_process_by_port",
+        {"port": "8080"},
+        set()
+    )
+
+    test(
+        "Block non-integer port",
+        valid is False
+    )
+
+
+# ============================================================
+# TEST 9 — LOG PATH ALLOWLIST
+# ============================================================
+
+def test_approved_log_path():
+
+    valid, error = validate_tool_arguments(
+        "read_recent_logs",
+        {"path": "test_app.log"},
+        set()
+    )
+
+    test(
+        "Allow approved log filename",
+        valid is True
+    )
+
+
+def test_unapproved_log_path():
+
+    valid, error = validate_tool_arguments(
+        "read_recent_logs",
+        {"path": r"C:\Windows\win.ini"},
+        set()
+    )
+
+    test(
+        "Block unapproved filesystem path",
+        valid is False
+    )
+
+
+def test_log_path_traversal():
+
+    valid, error = validate_tool_arguments(
+        "read_recent_logs",
+        {"path": r"..\..\..\Windows\win.ini"},
+        set()
+    )
+
+    test(
+        "Block path traversal outside allowlist",
+        valid is False
+    )
+
+
+# ============================================================
+# TEST 10 — PROCESS RANKING BOUNDS
+# ============================================================
+
+def test_top_n_too_large():
+
+    valid, error = validate_tool_arguments(
+        "find_high_consumption_processes",
+        {"top_n": 500, "sort_by": "cpu"},
+        set()
+    )
+
+    test(
+        "Block oversized top_n",
+        valid is False
+    )
+
+
+def test_invalid_sort_by():
+
+    valid, error = validate_tool_arguments(
+        "find_high_consumption_processes",
+        {"top_n": 5, "sort_by": "disk"},
+        set()
+    )
+
+    test(
+        "Block unsupported sort_by",
+        valid is False
+    )
+
+
+# ============================================================
 # TEST 6 — EMPTY PROCESS RESULT
 # ============================================================
 
@@ -199,6 +309,13 @@ def main():
     test_other_tools()
     test_empty_process_result()
     test_nested_pid_extraction()
+    test_invalid_port()
+    test_non_integer_port()
+    test_approved_log_path()
+    test_unapproved_log_path()
+    test_log_path_traversal()
+    test_top_n_too_large()
+    test_invalid_sort_by()
 
     print()
     print("=" * 60)

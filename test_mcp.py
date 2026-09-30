@@ -237,6 +237,64 @@ async def main():
             )
 
             # ------------------------------------------------
+            # TEST 6b — INVALID PORT BLOCKED BY SERVER
+            # ------------------------------------------------
+
+            result = await session.call_tool(
+                "find_process_by_port",
+                {
+                    "port": 99999
+                }
+            )
+
+            output = ""
+
+            for content in result.content:
+
+                if hasattr(content, "text"):
+                    output += content.text
+
+            try:
+                data = json.loads(output)
+            except json.JSONDecodeError:
+                data = {}
+
+            test(
+                "find_process_by_port rejects invalid port",
+                "error" in data
+            )
+
+            # ------------------------------------------------
+            # TEST 6c — UNAPPROVED LOG PATH BLOCKED
+            # ------------------------------------------------
+
+            result = await session.call_tool(
+                "read_recent_logs",
+                {
+                    "path": r"C:\Windows\win.ini",
+                    "lines": 20
+                }
+            )
+
+            output = ""
+
+            for content in result.content:
+
+                if hasattr(content, "text"):
+                    output += content.text
+
+            try:
+                data = json.loads(output)
+            except json.JSONDecodeError:
+                data = {}
+
+            test(
+                "read_recent_logs blocks unapproved path",
+                "error" in data
+                and "allowlist" in data.get("error", "").lower()
+            )
+
+            # ------------------------------------------------
             # TEST 7 — SYSTEM METRICS
             # ------------------------------------------------
 

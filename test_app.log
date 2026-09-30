@@ -1,0 +1,6 @@
+2026-09-22 10:00:01 INFO Application started
+2026-09-22 10:00:02 INFO Starting HTTP server
+2026-09-22 10:00:03 INFO Server configured to use port 8080
+2026-09-22 10:00:04 ERROR Failed to start server
+2026-09-22 10:00:04 ERROR Address already in use: port 8080
+2026-09-22 10:00:05 ERROR Application startup failed
